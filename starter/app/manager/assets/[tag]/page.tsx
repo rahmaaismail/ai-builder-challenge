@@ -109,7 +109,7 @@ export default async function ManagerAssetDetailPage({
               asset.location.row  ? ["Row",  asset.location.row]  : null,
               asset.location.rack ? ["Rack", asset.location.rack] : null,
               asset.location.ru   ? ["RU",   String(asset.location.ru)] : null,
-            ].filter(Boolean).map(([label, value]) => (
+            ].filter((x): x is [string, string] => x !== null).map(([label, value]) => (
               <div key={label} className="flex justify-between items-center">
                 <span className="text-xs text-gray-500">{label}</span>
                 <span className="font-mono text-[11px] text-gray-900 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-md">
