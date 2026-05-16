@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AssetCard } from "@/components/AssetCard";
+import { CameraScanner } from "@/components/CameraScanner";
 import { getCurrentUserId } from "@/lib/auth";
 import type { Asset } from "@/lib/types";
 
@@ -9,8 +10,7 @@ type Phase =
   | { name: "scan_asset" }
   | { name: "looking_up" }
   | { name: "asset_ready"; asset: Asset }
-  | { name: "bad_state"; asset: Asset }
-  | { name: "confirm"; asset: Asset }
+  | { name: "bad_state"; asset: Asset; reason: string }
   | { name: "submitting" }
   | { name: "success"; asset: Asset }
   | { name: "error"; code: string; message: string };
@@ -21,7 +21,7 @@ const ROOMS: Record<string, string[]> = {
   "Lab-Building-B": ["Storage-2", "Storage-3"],
   "Lab-Building-C": ["Storage-1"],
 };
-const SHELVES = ["SHELF-1", "SHELF-2", "SHELF-3", "SHELF-4", "SHELF-5", "SHELF-6", "SHELF-7", "SHELF-8", "SHELF-9", "SHELF-10", "SHELF-11", "SHELF-12"];
+const SHELVES = Array.from({ length: 12 }, (_, i) => `SHELF-${i + 1}`);
 
 export default function TechStorePage() {
   const [phase, setPhase] = useState<Phase>({ name: "scan_asset" });
@@ -29,6 +29,7 @@ export default function TechStorePage() {
   const [site, setSite] = useState(SITES[0]!);
   const [room, setRoom] = useState(ROOMS[SITES[0]!]![0]!);
   const [shelf, setShelf] = useState(SHELVES[0]!);
+  const [showCamera, setShowCamera] = useState(false);
 
   function reset() {
     setPhase({ name: "scan_asset" });
@@ -49,21 +50,40 @@ export default function TechStorePage() {
     try {
       const res = await fetch(`/api/upstream/assets/${encodeURIComponent(tag.trim())}`);
       const data = await res.json() as Asset | { error: { code: string; message: string } };
+
       if (!res.ok) {
         const err = (data as { error: { code: string; message: string } }).error;
         setPhase({ name: "error", code: err.code, message: err.message });
         return;
       }
+
       const asset = data as Asset;
-      const canStore = asset.state === "received" || asset.state === "in_service" || asset.state === "stored";
-      setPhase(canStore ? { name: "asset_ready", asset } : { name: "bad_state", asset });
+
+      const badStateReason =
+        asset.state === "stored"
+          ? "This asset is already in storage. Check the location — it may just need to be moved to a different shelf."
+          : asset.state === "disposed"
+          ? "This asset has been disposed and can't be stored. Contact finance."
+          : asset.state === "rma_pending"
+          ? "This asset has an RMA pending. Resolve the RMA before storing it."
+          : asset.state === "unreceived"
+          ? "This asset hasn't been received yet. Complete the receive step first."
+          : null;
+
+      if (badStateReason) {
+        setPhase({ name: "bad_state", asset, reason: badStateReason });
+        return;
+      }
+
+      // received or in_service → allowed
+      setPhase({ name: "asset_ready", asset });
     } catch {
       setPhase({ name: "error", code: "network", message: "Can't reach the server." });
     }
   }
 
   async function handleSubmit() {
-    if (phase.name !== "asset_ready" && phase.name !== "confirm") return;
+    if (phase.name !== "asset_ready") return;
     const asset = phase.asset;
     setPhase({ name: "submitting" });
     try {
@@ -85,32 +105,49 @@ export default function TechStorePage() {
       }
       setPhase({ name: "success", asset: data as Asset });
     } catch {
-      setPhase({ name: "error", code: "network", message: "Store failed." });
+      setPhase({ name: "error", code: "network", message: "Store failed. Check your connection and try again." });
     }
   }
 
   return (
     <div className="max-w-lg mx-auto py-4 space-y-5">
+      {showCamera && (
+        <CameraScanner
+          onScan={(value) => { setTag(value); setShowCamera(false); }}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
       <div className="flex items-center gap-3">
         <Link href="/tech" className="text-gray-400 hover:text-gray-600 text-sm">←</Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Store asset</h1>
-          <p className="text-xs text-gray-500">Move equipment to a shelf or staging area.</p>
+          <h1 className="text-2xl font-bold text-white">Store Asset</h1>
+          <p className="text-xs text-gray-400">Move equipment to a shelf or staging area.</p>
         </div>
       </div>
 
       {phase.name === "scan_asset" && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Asset tag</label>
-            <input
-              type="text"
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              placeholder="e.g. C0009001"
-              autoFocus
-              className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm font-mono focus:border-blue-600 focus:outline-none"
-            />
+            <label className="block text-sm font-medium text-white mb-1">Asset Tag</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                placeholder="e.g. C0009001"
+                autoFocus
+                className="flex-1 rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm font-mono focus:border-blue-600 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCamera(true)}
+                className="rounded-lg border-2 border-gray-300 px-4 text-xl hover:bg-gray-50 min-h-[44px]"
+                aria-label="Scan with camera"
+              >
+                📷
+              </button>
+            </div>
           </div>
           <button
             disabled={!tag.trim()}
@@ -139,24 +176,22 @@ export default function TechStorePage() {
           <AssetCard asset={phase.asset} />
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
             <p className="text-sm font-semibold text-red-900">Can't store this asset</p>
-            <p className="text-xs text-red-700 mt-1">
-              This asset is <strong>{phase.asset.state}</strong>. Store is only allowed from <em>received</em> or <em>in service</em>.
-            </p>
+            <p className="text-xs text-red-700 mt-1">{phase.reason}</p>
           </div>
-          <button onClick={reset} className="w-full rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">Try a different asset</button>
+          <button onClick={reset} className="w-full rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">
+            Try a different asset
+          </button>
         </div>
       )}
 
       {phase.name === "asset_ready" && (
         <div className="space-y-4">
           <AssetCard asset={phase.asset} />
-
           {phase.asset.state === "in_service" && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
               <strong>De-racking</strong> — this asset is currently in service. Storing it will remove it from the rack.
             </div>
           )}
-
           <div className="space-y-3">
             <p className="text-sm font-medium text-gray-700">Where are you putting it?</p>
             <div>
@@ -178,7 +213,6 @@ export default function TechStorePage() {
               </select>
             </div>
           </div>
-
           <div className="flex gap-3">
             <button onClick={reset} className="flex-1 rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
             <button onClick={handleSubmit} className="flex-1 rounded-lg bg-amber-600 py-3.5 text-sm font-semibold text-white hover:bg-amber-700 min-h-[44px]">Store asset</button>
@@ -204,6 +238,7 @@ export default function TechStorePage() {
             <p className="text-sm font-semibold text-red-900">
               {phase.code === "invalid_transition" ? "Can't store from this state"
               : phase.code === "unknown_asset" ? "Asset not found"
+              : phase.code === "network" ? "Connection error"
               : "Something went wrong"}
             </p>
             <p className="text-sm text-red-700 mt-1">{phase.message}</p>

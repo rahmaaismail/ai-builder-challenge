@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AssetCard } from "@/components/AssetCard";
+import { CameraScanner } from "@/components/CameraScanner";
 import { getCurrentUserId } from "@/lib/auth";
 import type { Asset } from "@/lib/types";
 
@@ -9,7 +10,7 @@ type Phase =
   | { name: "scan_asset" }
   | { name: "looking_up" }
   | { name: "asset_ready"; asset: Asset }
-  | { name: "bad_state"; asset: Asset }
+  | { name: "bad_state"; asset: Asset; reason: string }
   | { name: "submitting" }
   | { name: "success"; asset: Asset }
   | { name: "error"; code: string; message: string };
@@ -33,6 +34,7 @@ export default function TechDeployPage() {
   const [rack, setRack] = useState(RACKS[0]!);
   const [ru, setRu] = useState("");
   const [locationError, setLocationError] = useState("");
+  const [showCamera, setShowCamera] = useState(false);
 
   function reset() {
     setPhase({ name: "scan_asset" });
@@ -56,14 +58,36 @@ export default function TechDeployPage() {
     try {
       const res = await fetch(`/api/upstream/assets/${encodeURIComponent(tag.trim())}`);
       const data = await res.json() as Asset | { error: { code: string; message: string } };
+
       if (!res.ok) {
         const err = (data as { error: { code: string; message: string } }).error;
         setPhase({ name: "error", code: err.code, message: err.message });
         return;
       }
+
       const asset = data as Asset;
-      const canDeploy = asset.state === "received" || asset.state === "stored";
-      setPhase(canDeploy ? { name: "asset_ready", asset } : { name: "bad_state", asset });
+
+      const badStateReason =
+        asset.state === "in_service"
+          ? "Already deployed. Store it first before moving it to a new rack position."
+          : asset.state === "disposed"
+          ? "This asset has been disposed and can't be deployed. Contact finance."
+          : asset.state === "rma_pending"
+          ? "This asset has an RMA pending. Resolve it before deploying."
+          : asset.state === "received"
+          ? "Asset hasn't been stored yet. Complete the store step before deploying."
+          : asset.state === "unreceived"
+          ? "Asset hasn't been received yet. Complete receive and store steps first."
+          : asset.state !== "stored"
+          ? `Can't deploy from state: ${asset.state}.`
+          : null;
+
+      if (badStateReason) {
+        setPhase({ name: "bad_state", asset, reason: badStateReason });
+        return;
+      }
+
+      setPhase({ name: "asset_ready", asset });
     } catch {
       setPhase({ name: "error", code: "network", message: "Can't reach the server." });
     }
@@ -71,14 +95,11 @@ export default function TechDeployPage() {
 
   async function handleSubmit() {
     if (phase.name !== "asset_ready") return;
-
-    // Client-side validation — catch missing ru before hitting the API
     if (!ru.trim()) {
       setLocationError("Rack unit (RU) is required to deploy. Select which U position in the rack.");
       return;
     }
     setLocationError("");
-
     setPhase({ name: "submitting" });
     try {
       const res = await fetch("/api/scans/deploy", {
@@ -99,32 +120,49 @@ export default function TechDeployPage() {
       }
       setPhase({ name: "success", asset: data as Asset });
     } catch {
-      setPhase({ name: "error", code: "network", message: "Deploy failed." });
+      setPhase({ name: "error", code: "network", message: "Deploy failed. Check your connection and try again." });
     }
   }
 
   return (
     <div className="max-w-lg mx-auto py-4 space-y-5">
+      {showCamera && (
+        <CameraScanner
+          onScan={(value) => { setTag(value); setShowCamera(false); }}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
       <div className="flex items-center gap-3">
         <Link href="/tech" className="text-gray-400 hover:text-gray-600 text-sm">←</Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Deploy asset</h1>
-          <p className="text-xs text-gray-500">Rack equipment and put it into service.</p>
+          <h1 className="text-2xl font-bold text-white">Deploy Asset</h1>
+          <p className="text-xs text-gray-400">Rack equipment and put it into service.</p>
         </div>
       </div>
 
       {phase.name === "scan_asset" && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Asset tag</label>
-            <input
-              type="text"
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              placeholder="e.g. C0009001"
-              autoFocus
-              className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm font-mono focus:border-blue-600 focus:outline-none"
-            />
+            <label className="block text-sm font-medium text-white mb-1">Asset Tag</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                placeholder="e.g. C0009001"
+                autoFocus
+                className="flex-1 rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm font-mono focus:border-blue-600 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCamera(true)}
+                className="rounded-lg border-2 border-gray-300 px-4 text-xl hover:bg-gray-50 min-h-[44px]"
+                aria-label="Scan with camera"
+              >
+                📷
+              </button>
+            </div>
           </div>
           <button
             disabled={!tag.trim()}
@@ -153,36 +191,31 @@ export default function TechDeployPage() {
           <AssetCard asset={phase.asset} />
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
             <p className="text-sm font-semibold text-red-900">Can't deploy this asset</p>
-            <p className="text-xs text-red-700 mt-1">
-              This asset is <strong>{phase.asset.state}</strong>. Deploy is only allowed from <em>received</em> or <em>stored</em>.
-              {phase.asset.state === "in_service" ? " It's already in service." : ""}
-            </p>
+            <p className="text-xs text-red-700 mt-1">{phase.reason}</p>
           </div>
-          <button onClick={reset} className="w-full rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">Try a different asset</button>
+          <button onClick={reset} className="w-full rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">
+            Try a different asset
+          </button>
         </div>
       )}
 
       {phase.name === "asset_ready" && (
         <div className="space-y-4">
           <AssetCard asset={phase.asset} />
-
           <div className="space-y-3">
             <p className="text-sm font-medium text-gray-700">Where are you racking it?</p>
-
             <div>
               <label className="block text-xs text-gray-500 mb-1">Site</label>
               <select value={site} onChange={(e) => handleSiteChange(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
                 {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-
             <div>
               <label className="block text-xs text-gray-500 mb-1">Room</label>
               <select value={room} onChange={(e) => setRoom(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
                 {(ROOMS[site] ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Row</label>
@@ -197,7 +230,6 @@ export default function TechDeployPage() {
                 </select>
               </div>
             </div>
-
             <div>
               <label className="block text-xs text-gray-500 mb-1">
                 Rack unit (RU) <span className="text-red-500">*</span>
@@ -207,15 +239,12 @@ export default function TechDeployPage() {
                 onChange={(e) => { setRu(e.target.value); setLocationError(""); }}
                 className={`w-full rounded-lg border-2 p-3 text-sm focus:outline-none ${locationError ? "border-red-400 focus:border-red-500" : "border-gray-300 focus:border-blue-600"}`}
               >
-                <option value="">Select RU position…</option>
+                <option value="">Select position…</option>
                 {RUS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
-              {locationError && (
-                <p className="text-xs text-red-600 mt-1">{locationError}</p>
-              )}
+              {locationError && <p className="text-xs text-red-600 mt-1">{locationError}</p>}
             </div>
           </div>
-
           <div className="flex gap-3">
             <button onClick={reset} className="flex-1 rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
             <button onClick={handleSubmit} className="flex-1 rounded-lg bg-emerald-600 py-3.5 text-sm font-semibold text-white hover:bg-emerald-700 min-h-[44px]">Deploy asset</button>
@@ -242,6 +271,7 @@ export default function TechDeployPage() {
               {phase.code === "incomplete_deploy_location" ? "Missing rack position"
               : phase.code === "invalid_transition" ? "Can't deploy from this state"
               : phase.code === "unknown_asset" ? "Asset not found"
+              : phase.code === "network" ? "Connection error"
               : "Something went wrong"}
             </p>
             <p className="text-sm text-red-700 mt-1">{phase.message}</p>
