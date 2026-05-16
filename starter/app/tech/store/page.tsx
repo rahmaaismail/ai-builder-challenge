@@ -1,12 +1,216 @@
+"use client";
+import { useState } from "react";
+import Link from "next/link";
+import { AssetCard } from "@/components/AssetCard";
+import { getCurrentUserId } from "@/lib/auth";
+import type { Asset } from "@/lib/types";
+
+type Phase =
+  | { name: "scan_asset" }
+  | { name: "looking_up" }
+  | { name: "asset_ready"; asset: Asset }
+  | { name: "bad_state"; asset: Asset }
+  | { name: "confirm"; asset: Asset }
+  | { name: "submitting" }
+  | { name: "success"; asset: Asset }
+  | { name: "error"; code: string; message: string };
+
+const SITES = ["Lab-Building-A", "Lab-Building-B", "Lab-Building-C"];
+const ROOMS: Record<string, string[]> = {
+  "Lab-Building-A": ["Storage-1", "Storage-2", "Staging-RMA"],
+  "Lab-Building-B": ["Storage-2", "Storage-3"],
+  "Lab-Building-C": ["Storage-1"],
+};
+const SHELVES = ["SHELF-1", "SHELF-2", "SHELF-3", "SHELF-4", "SHELF-5", "SHELF-6", "SHELF-7", "SHELF-8", "SHELF-9", "SHELF-10", "SHELF-11", "SHELF-12"];
+
 export default function TechStorePage() {
+  const [phase, setPhase] = useState<Phase>({ name: "scan_asset" });
+  const [tag, setTag] = useState("");
+  const [site, setSite] = useState(SITES[0]!);
+  const [room, setRoom] = useState(ROOMS[SITES[0]!]![0]!);
+  const [shelf, setShelf] = useState(SHELVES[0]!);
+
+  function reset() {
+    setPhase({ name: "scan_asset" });
+    setTag("");
+    setSite(SITES[0]!);
+    setRoom(ROOMS[SITES[0]!]![0]!);
+    setShelf(SHELVES[0]!);
+  }
+
+  function handleSiteChange(s: string) {
+    setSite(s);
+    setRoom(ROOMS[s]![0]!);
+  }
+
+  async function handleTagSubmit() {
+    if (!tag.trim()) return;
+    setPhase({ name: "looking_up" });
+    try {
+      const res = await fetch(`/api/upstream/assets/${encodeURIComponent(tag.trim())}`);
+      const data = await res.json() as Asset | { error: { code: string; message: string } };
+      if (!res.ok) {
+        const err = (data as { error: { code: string; message: string } }).error;
+        setPhase({ name: "error", code: err.code, message: err.message });
+        return;
+      }
+      const asset = data as Asset;
+      const canStore = asset.state === "received" || asset.state === "in_service" || asset.state === "stored";
+      setPhase(canStore ? { name: "asset_ready", asset } : { name: "bad_state", asset });
+    } catch {
+      setPhase({ name: "error", code: "network", message: "Can't reach the server." });
+    }
+  }
+
+  async function handleSubmit() {
+    if (phase.name !== "asset_ready" && phase.name !== "confirm") return;
+    const asset = phase.asset;
+    setPhase({ name: "submitting" });
+    try {
+      const res = await fetch("/api/scans/store", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_tag: asset.asset_tag,
+          location: { site, room, row: null, rack: shelf, ru: null },
+          user_id: getCurrentUserId(),
+          scan_payload: `STORE|${asset.asset_tag}`,
+        }),
+      });
+      const data = await res.json() as Asset | { error: { code: string; message: string } };
+      if (!res.ok) {
+        const err = (data as { error: { code: string; message: string } }).error;
+        setPhase({ name: "error", code: err.code, message: err.message });
+        return;
+      }
+      setPhase({ name: "success", asset: data as Asset });
+    } catch {
+      setPhase({ name: "error", code: "network", message: "Store failed." });
+    }
+  }
+
   return (
-    <div className="p-2">
-      <h1 className="text-2xl font-bold">Store (stub)</h1>
-      <p className="text-gray-600 mt-2">
-        Build the store workflow here. Scan an asset tag, scan a storage
-        location, transition the asset to <code>stored</code>. See{" "}
-        <code>docs/tips.md</code>.
-      </p>
+    <div className="max-w-lg mx-auto py-4 space-y-5">
+      <div className="flex items-center gap-3">
+        <Link href="/tech" className="text-gray-400 hover:text-gray-600 text-sm">←</Link>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Store asset</h1>
+          <p className="text-xs text-gray-500">Move equipment to a shelf or staging area.</p>
+        </div>
+      </div>
+
+      {phase.name === "scan_asset" && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Asset tag</label>
+            <input
+              type="text"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="e.g. C0009001"
+              autoFocus
+              className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm font-mono focus:border-blue-600 focus:outline-none"
+            />
+          </div>
+          <button
+            disabled={!tag.trim()}
+            onClick={handleTagSubmit}
+            className="w-full rounded-lg bg-gray-900 py-3.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px]"
+          >
+            Look up asset
+          </button>
+        </div>
+      )}
+
+      {phase.name === "looking_up" && (
+        <div className="rounded-xl border bg-white p-6 text-center text-gray-400 text-sm animate-pulse">
+          Looking up asset…
+        </div>
+      )}
+
+      {phase.name === "submitting" && (
+        <div className="rounded-xl border bg-white p-6 text-center text-gray-400 text-sm animate-pulse">
+          Saving…
+        </div>
+      )}
+
+      {phase.name === "bad_state" && (
+        <div className="space-y-4">
+          <AssetCard asset={phase.asset} />
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <p className="text-sm font-semibold text-red-900">Can't store this asset</p>
+            <p className="text-xs text-red-700 mt-1">
+              This asset is <strong>{phase.asset.state}</strong>. Store is only allowed from <em>received</em> or <em>in service</em>.
+            </p>
+          </div>
+          <button onClick={reset} className="w-full rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">Try a different asset</button>
+        </div>
+      )}
+
+      {phase.name === "asset_ready" && (
+        <div className="space-y-4">
+          <AssetCard asset={phase.asset} />
+
+          {phase.asset.state === "in_service" && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+              <strong>De-racking</strong> — this asset is currently in service. Storing it will remove it from the rack.
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-gray-700">Where are you putting it?</p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Site</label>
+              <select value={site} onChange={(e) => handleSiteChange(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+                {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Room</label>
+              <select value={room} onChange={(e) => setRoom(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+                {(ROOMS[site] ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Shelf</label>
+              <select value={shelf} onChange={(e) => setShelf(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+                {SHELVES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button onClick={reset} className="flex-1 rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+            <button onClick={handleSubmit} className="flex-1 rounded-lg bg-amber-600 py-3.5 text-sm font-semibold text-white hover:bg-amber-700 min-h-[44px]">Store asset</button>
+          </div>
+        </div>
+      )}
+
+      {phase.name === "success" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center">
+            <div className="text-4xl mb-2">✓</div>
+            <p className="font-semibold text-emerald-900 text-lg">Asset stored</p>
+            <p className="text-sm text-emerald-700 mt-1 font-mono">{phase.asset.asset_tag}</p>
+          </div>
+          <AssetCard asset={phase.asset} />
+          <button onClick={reset} className="w-full rounded-lg bg-gray-900 py-3.5 text-sm font-semibold text-white hover:bg-gray-800 min-h-[44px]">Store another</button>
+        </div>
+      )}
+
+      {phase.name === "error" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <p className="text-sm font-semibold text-red-900">
+              {phase.code === "invalid_transition" ? "Can't store from this state"
+              : phase.code === "unknown_asset" ? "Asset not found"
+              : "Something went wrong"}
+            </p>
+            <p className="text-sm text-red-700 mt-1">{phase.message}</p>
+          </div>
+          <button onClick={reset} className="w-full rounded-lg border border-gray-300 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 min-h-[44px]">Try again</button>
+        </div>
+      )}
     </div>
   );
 }

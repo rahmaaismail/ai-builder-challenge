@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
+import { runReconciliation } from "@/lib/reconcile";
 
 export async function GET(): Promise<NextResponse> {
-  return NextResponse.json(
-    {
-      error: {
-        code: "not_implemented",
-        message:
-          "Build the reconciliation logic in app/api/reconcile/route.ts",
-        hint: "Pull from api.assets.list(), api.mock.facilities(), api.mock.finance(); compare; classify; return.",
-      },
-    },
-    { status: 501 },
-  );
+  try {
+    const report = await runReconciliation();
+    return NextResponse.json(report);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json(
+      { error: { code: "reconcile_failed", message } },
+      { status: 502 },
+    );
+  }
 }
