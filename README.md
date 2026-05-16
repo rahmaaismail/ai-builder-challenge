@@ -1,6 +1,6 @@
 # Asset Tracking — Submission
 
-**Live demo:** [placeholder — Vercel URL]
+**Live demo:** https://ai-builder-challenge-starter-nine.vercel.app/
 
 ## Running locally
 
@@ -11,11 +11,11 @@ cp starter/.env.example starter/.env
 pnpm dev   # API on :8080, starter on :3000
 ```
 
-## Environment variables
+## Environment Variables
 
 | Variable | Required | Notes |
 |---|---|---|
-| `API_BASE_URL` | Yes | Upstream API including `/v1` — e.g. `https://your-api.railway.app/v1` |
+| `API_BASE_URL` | Yes | Upstream API including `/v1` — e.g. `https://asset-trackingapi-production-c425.up.railway.app/v1` |
 | `API_TOKEN` | Yes | Server-only bearer token. Never use `NEXT_PUBLIC_API_TOKEN`. Browser requests go through `/api/upstream/*` which attaches it server-side. |
 
 Both variables are server-side only. The browser never sees them. The default values in `.env.example` work for local development as-is.
