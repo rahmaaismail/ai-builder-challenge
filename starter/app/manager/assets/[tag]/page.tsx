@@ -90,7 +90,7 @@ export default async function ManagerAssetDetailPage({
           <h1 className="text-2xl font-medium text-white font-mono tracking-tight">
             {asset.asset_tag}
           </h1>
-          <p className="text-sm text-white-500 mt-1">{asset.model ?? asset.asset_type ?? ""}</p>
+          <p className="text-sm text-white-500 mt-1">{asset.model ?? asset.asset_class ?? ""}</p>
         </div>
         <StateBadge state={asset.state} />
       </div>
