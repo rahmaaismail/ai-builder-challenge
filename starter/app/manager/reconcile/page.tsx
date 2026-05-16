@@ -1,19 +1,39 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import type { ReconciliationReport, ReportItem } from "@/lib/reconcile";
 
-type Status = { state: "loading" } | { state: "ok"; report: ReconciliationReport } | { state: "error"; message: string };
+type Status = { state: "loading" } | { state: "ok"; report: ReconciliationReport; fetchedAt: Date } | { state: "error"; message: string };
+
+function useMinutesAgo(date: Date | null): string {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!date) return;
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, [date]);
+  if (!date) return "";
+  const mins = Math.floor((Date.now() - date.getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins === 1) return "1 min ago";
+  return `${mins} mins ago`;
+}
 
 export default function ManagerReconcilePage() {
   const [status, setStatus] = useState<Status>({ state: "loading" });
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setStatus({ state: "loading" });
     fetch("/api/reconcile")
       .then((r) => r.json())
-      .then((data: ReconciliationReport) => setStatus({ state: "ok", report: data }))
+      .then((data: ReconciliationReport) => setStatus({ state: "ok", report: data, fetchedAt: new Date() }))
       .catch((e) => setStatus({ state: "error", message: String(e) }));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const fetchedAt = status.state === "ok" ? status.fetchedAt : null;
+  const staleness = useMinutesAgo(fetchedAt);
 
   return (
     <div className="space-y-6">
@@ -23,11 +43,18 @@ export default function ManagerReconcilePage() {
           <h1 className="text-2xl font-bold text-white mt-1">Three-Way Reconciliation</h1>
           <p className="text-sm text-gray-400 mt-0.5">Comparing ops, facilities, and finance.</p>
         </div>
-        {status.state === "ok" && (
-          <p className="text-xs text-gray-400 whitespace-nowrap">
-            Generated {new Date(status.report.generated_at).toLocaleString()}
-          </p>
-        )}
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          {status.state === "ok" && (
+            <p className="text-xs text-gray-500">Updated {staleness}</p>
+          )}
+          <button
+            onClick={load}
+            disabled={status.state === "loading"}
+            className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {status.state === "loading" ? "Refreshing…" : "↻ Refresh"}
+          </button>
+        </div>
       </div>
 
       {status.state === "loading" && (
@@ -45,6 +72,9 @@ export default function ManagerReconcilePage() {
           <p className="font-semibold text-red-400 text-sm">Failed to load report</p>
           <p className="text-sm text-red-500 mt-1">{status.message}</p>
           <p className="text-xs text-red-600 mt-2">Make sure the API is running and API_TOKEN is set in starter/.env</p>
+          <button onClick={load} className="mt-3 text-xs text-red-400 hover:text-red-300 border border-red-800 rounded-lg px-3 py-1.5">
+            Try again
+          </button>
         </div>
       )}
 
@@ -58,10 +88,10 @@ function Report({ report }: { report: ReconciliationReport }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <SummaryCard label="Ops assets"     value={summary.ops_total}        color="text-white"        />
-        <SummaryCard label="Action needed"  value={summary.action_count}     color="text-red-400"     bg="bg-red-950 border-red-800" />
-        <SummaryCard label="Investigate"    value={summary.investigate_count} color="text-amber-400"  bg="bg-amber-950 border-amber-800" />
-        <SummaryCard label="Clean"          value={summary.clean_count}      color="text-emerald-400" bg="bg-emerald-950 border-emerald-800" />
+        <SummaryCard label="Ops assets"     value={summary.ops_total}         color="text-white"        />
+        <SummaryCard label="Action needed"  value={summary.action_count}      color="text-red-400"      bg="bg-red-950 border-red-800" />
+        <SummaryCard label="Investigate"    value={summary.investigate_count} color="text-amber-400"    bg="bg-amber-950 border-amber-800" />
+        <SummaryCard label="Clean"          value={summary.clean_count}       color="text-emerald-400"  bg="bg-emerald-950 border-emerald-800" />
       </div>
 
       <Section title="Action Required"  subtitle="These need someone to fix them before the next audit." color="red"   items={action}     emptyText="No action items — everything is in order." />

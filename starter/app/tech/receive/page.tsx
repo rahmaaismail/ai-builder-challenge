@@ -13,6 +13,8 @@ type Phase =
   | { name: "success"; asset: Asset; isNew: boolean }
   | { name: "error"; code: string; message: string; details?: Record<string, unknown> };
 
+type ScanRecord = { tag: string; serial: string; at: Date };
+
 const SITES = ["Lab-Building-A", "Lab-Building-B", "Lab-Building-C"];
 const DOCKS = ["DOCK-1", "DOCK-2", "DOCK-3", "DOCK-4"];
 
@@ -23,6 +25,7 @@ export default function TechReceivePage() {
   const [site, setSite] = useState(SITES[0]!);
   const [dock, setDock] = useState(DOCKS[0]!);
   const [showCamera, setShowCamera] = useState(false);
+  const [history, setHistory] = useState<ScanRecord[]>([]);
 
   function reset() {
     setPhase({ name: "scan" });
@@ -53,7 +56,6 @@ export default function TechReceivePage() {
       }
 
       if (existingAsset) {
-        // Block bad states before even trying
         if (existingAsset.state === "disposed") {
           setPhase({ name: "error", code: "disposed", message: "This asset has been disposed and can't be re-received. Contact finance to write it off first." });
           return;
@@ -71,7 +73,6 @@ export default function TechReceivePage() {
           return;
         }
 
-        // Serial mismatch check
         if (existingAsset.serial !== serial.trim()) {
           setPhase({
             name: "error",
@@ -97,6 +98,7 @@ export default function TechReceivePage() {
         scan_payload: `RECEIVE|${tag.trim()}|${serial.trim()}`,
       });
 
+      setHistory((prev) => [{ tag: tag.trim(), serial: serial.trim(), at: new Date() }, ...prev].slice(0, 5));
       setPhase({ name: "success", asset, isNew: existingAsset === null });
     } catch (err) {
       if (err instanceof ApiError) {
@@ -105,6 +107,10 @@ export default function TechReceivePage() {
         setPhase({ name: "error", code: "network", message: "Can't reach the server. Try again." });
       }
     }
+  }
+
+  function fmtTime(d: Date): string {
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   }
 
   return (
@@ -189,6 +195,22 @@ export default function TechReceivePage() {
           >
             Receive asset
           </button>
+
+          {history.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest">This session</p>
+              {history.map((r, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg bg-gray-900 border border-gray-800 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                    <span className="font-mono text-xs text-white">{r.tag}</span>
+                    <span className="text-gray-600 text-xs">{r.serial}</span>
+                  </div>
+                  <span className="text-[11px] text-gray-500">{fmtTime(r.at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -226,6 +248,22 @@ export default function TechReceivePage() {
           >
             Scan next asset
           </button>
+
+          {history.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest">This session</p>
+              {history.map((r, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg bg-gray-900 border border-gray-800 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                    <span className="font-mono text-xs text-white">{r.tag}</span>
+                    <span className="text-gray-600 text-xs">{r.serial}</span>
+                  </div>
+                  <span className="text-[11px] text-gray-500">{fmtTime(r.at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

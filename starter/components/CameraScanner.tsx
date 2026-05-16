@@ -22,6 +22,53 @@ export function CameraScanner({ onScan, onClose }: Props) {
   const scanStateRef = useRef<ScanState>("scanning");
   const didScanRef = useRef(false);
 
+  function playSuccessBeep() {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(1046, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(1318, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.4);
+    navigator.vibrate?.([100]);
+  }
+
+  function playUnstableBeep() {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(600, ctx.currentTime);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.3);
+    navigator.vibrate?.([50, 50, 50]);
+  }
+
+  function playErrorBeep() {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(600, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(400, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.4);
+    navigator.vibrate?.([200]);
+  }
+
   function stopCamera() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -48,9 +95,11 @@ export function CameraScanner({ onScan, onClose }: Props) {
       if (unstableCount.current >= 2) {
         scanStateRef.current = "invalid";
         setScanState("invalid");
+        playErrorBeep();
       } else {
         scanStateRef.current = "unstable";
         setScanState("unstable");
+        playUnstableBeep();
       }
     }, 3000);
   }
@@ -75,7 +124,6 @@ export function CameraScanner({ onScan, onClose }: Props) {
 
     async function start() {
       try {
-        // We call getUserMedia ourselves so we own the stream
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
         });
@@ -94,7 +142,6 @@ export function CameraScanner({ onScan, onClose }: Props) {
         const reader = new BrowserMultiFormatReader();
         readerRef.current = reader;
 
-        // Decode from the video element directly (no getUserMedia call inside zxing)
         reader.decodeFromVideoElement(video, (result, err) => {
           if (didScanRef.current) return;
 
@@ -109,6 +156,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
             unstableCount.current = 0;
             clearNoScanTimer();
             stopCamera();
+            playSuccessBeep();
 
             setTimeout(() => {
               onScan(value.trim());
@@ -140,7 +188,6 @@ export function CameraScanner({ onScan, onClose }: Props) {
     };
   }, [attemptKey]);
 
-  // ── Success ──────────────────────────────────────────────────────────────────
   if (scanState === "success") {
     return (
       <div className="fixed inset-0 z-50 bg-emerald-500 flex flex-col items-center justify-center space-y-4">
@@ -151,7 +198,6 @@ export function CameraScanner({ onScan, onClose }: Props) {
     );
   }
 
-  // ── Hold still ────────────────────────────────────────────────────────────────
   if (scanState === "unstable") {
     return (
       <div className="fixed inset-0 z-50 bg-amber-500 flex flex-col items-center justify-center space-y-4 px-8 text-center">
@@ -173,7 +219,6 @@ export function CameraScanner({ onScan, onClose }: Props) {
     );
   }
 
-  // ── Unable to read ────────────────────────────────────────────────────────────
   if (scanState === "invalid") {
     return (
       <div className="fixed inset-0 z-50 bg-red-500 flex flex-col items-center justify-center space-y-4 px-8 text-center">
@@ -195,7 +240,6 @@ export function CameraScanner({ onScan, onClose }: Props) {
     );
   }
 
-  // ── Scanning ──────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b">

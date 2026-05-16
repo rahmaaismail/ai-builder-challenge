@@ -15,6 +15,8 @@ type Phase =
   | { name: "success"; asset: Asset }
   | { name: "error"; code: string; message: string };
 
+type ScanRecord = { tag: string; at: Date };
+
 const SITES = ["Lab-Building-A", "Lab-Building-B", "Lab-Building-C"];
 const ROOMS: Record<string, string[]> = {
   "Lab-Building-A": ["Storage-1", "Storage-2", "Staging-RMA"],
@@ -30,6 +32,7 @@ export default function TechStorePage() {
   const [room, setRoom] = useState(ROOMS[SITES[0]!]![0]!);
   const [shelf, setShelf] = useState(SHELVES[0]!);
   const [showCamera, setShowCamera] = useState(false);
+  const [history, setHistory] = useState<ScanRecord[]>([]);
 
   function reset() {
     setPhase({ name: "scan_asset" });
@@ -75,7 +78,6 @@ export default function TechStorePage() {
         return;
       }
 
-      // received or in_service → allowed
       setPhase({ name: "asset_ready", asset });
     } catch {
       setPhase({ name: "error", code: "network", message: "Can't reach the server." });
@@ -103,10 +105,34 @@ export default function TechStorePage() {
         setPhase({ name: "error", code: err.code, message: err.message });
         return;
       }
+      setHistory((prev) => [{ tag: asset.asset_tag, at: new Date() }, ...prev].slice(0, 5));
       setPhase({ name: "success", asset: data as Asset });
     } catch {
       setPhase({ name: "error", code: "network", message: "Store failed. Check your connection and try again." });
     }
+  }
+
+  function fmtTime(d: Date): string {
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function ScanHistory() {
+    if (history.length === 0) return null;
+    return (
+      <div className="space-y-1.5 pt-1">
+        <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest">This session</p>
+        {history.map((r, i) => (
+          <div key={i} className="flex items-center justify-between rounded-lg bg-gray-900 border border-gray-800 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+              <span className="font-mono text-xs text-white">{r.tag}</span>
+              <span className="text-gray-600 text-xs">stored</span>
+            </div>
+            <span className="text-[11px] text-gray-500">{fmtTime(r.at)}</span>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -156,6 +182,7 @@ export default function TechStorePage() {
           >
             Look up asset
           </button>
+          <ScanHistory />
         </div>
       )}
 
@@ -229,6 +256,7 @@ export default function TechStorePage() {
           </div>
           <AssetCard asset={phase.asset} />
           <button onClick={reset} className="w-full rounded-lg bg-gray-900 py-3.5 text-sm font-semibold text-white hover:bg-gray-800 min-h-[44px]">Store another</button>
+          <ScanHistory />
         </div>
       )}
 

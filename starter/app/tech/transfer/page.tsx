@@ -18,6 +18,8 @@ type Phase =
   | { name: "success"; asset: Asset; fromCustodian: string }
   | { name: "error"; code: string; message: string };
 
+type ScanRecord = { tag: string; to: string; at: Date };
+
 export default function TechTransferPage() {
   const [phase, setPhase] = useState<Phase>({ name: "scan_asset" });
   const [tag, setTag] = useState("");
@@ -25,6 +27,7 @@ export default function TechTransferPage() {
   const [badgeError, setBadgeError] = useState("");
   const [showAssetCamera, setShowAssetCamera] = useState(false);
   const [showBadgeCamera, setShowBadgeCamera] = useState(false);
+  const [history, setHistory] = useState<ScanRecord[]>([]);
 
   function reset() {
     setPhase({ name: "scan_asset" });
@@ -79,19 +82,45 @@ export default function TechTransferPage() {
   async function handleSubmit() {
     if (phase.name !== "confirm") return;
     const fromCustodian = phase.asset.custodian;
+    const toC = phase.toCustodian;
+    const assetTag = phase.asset.asset_tag;
     setPhase({ name: "submitting" });
     try {
       const result = await api.scans.transfer({
-        asset_tag: phase.asset.asset_tag,
-        to_custodian: phase.toCustodian,
+        asset_tag: assetTag,
+        to_custodian: toC,
         user_id: getCurrentUserId(),
-        scan_payload: `TRANSFER|${phase.asset.asset_tag}|${phase.toCustodian}`,
+        scan_payload: `TRANSFER|${assetTag}|${toC}`,
       });
+      setHistory((prev) => [{ tag: assetTag, to: toC, at: new Date() }, ...prev].slice(0, 5));
       setPhase({ name: "success", asset: result, fromCustodian });
     } catch (err) {
       if (err instanceof ApiError) setPhase({ name: "error", code: err.code, message: err.message });
       else setPhase({ name: "error", code: "network", message: "Transfer failed. Check your connection and try again." });
     }
+  }
+
+  function fmtTime(d: Date): string {
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function ScanHistory() {
+    if (history.length === 0) return null;
+    return (
+      <div className="space-y-1.5 pt-1">
+        <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest">This session</p>
+        {history.map((r, i) => (
+          <div key={i} className="flex items-center justify-between rounded-lg bg-gray-900 border border-gray-800 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+              <span className="font-mono text-xs text-white">{r.tag}</span>
+              <span className="text-gray-600 text-xs">→ {r.to}</span>
+            </div>
+            <span className="text-[11px] text-gray-500">{fmtTime(r.at)}</span>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -151,6 +180,7 @@ export default function TechTransferPage() {
           >
             Look up asset
           </button>
+          <ScanHistory />
         </div>
       )}
 
@@ -250,6 +280,7 @@ export default function TechTransferPage() {
           </div>
           <AssetCard asset={phase.asset} />
           <button onClick={reset} className="w-full rounded-lg bg-gray-900 py-3.5 text-sm font-semibold text-white hover:bg-gray-800 min-h-[44px]">Scan next asset</button>
+          <ScanHistory />
         </div>
       )}
 

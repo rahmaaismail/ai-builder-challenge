@@ -15,6 +15,8 @@ type Phase =
   | { name: "success"; asset: Asset }
   | { name: "error"; code: string; message: string };
 
+type ScanRecord = { tag: string; at: Date };
+
 const SITES = ["Lab-Building-A", "Lab-Building-B", "Lab-Building-C"];
 const ROOMS: Record<string, string[]> = {
   "Lab-Building-A": ["Bay-1", "Bay-2", "Bay-3", "Bay-4", "Bay-5", "Bay-6", "Bay-7", "Bay-8", "Bay-9", "Bay-10", "Bay-11", "Bay-12", "Telecom-1"],
@@ -35,6 +37,7 @@ export default function TechDeployPage() {
   const [ru, setRu] = useState("");
   const [locationError, setLocationError] = useState("");
   const [showCamera, setShowCamera] = useState(false);
+  const [history, setHistory] = useState<ScanRecord[]>([]);
 
   function reset() {
     setPhase({ name: "scan_asset" });
@@ -118,10 +121,34 @@ export default function TechDeployPage() {
         setPhase({ name: "error", code: err.code, message: err.message });
         return;
       }
+      setHistory((prev) => [{ tag: phase.asset.asset_tag, at: new Date() }, ...prev].slice(0, 5));
       setPhase({ name: "success", asset: data as Asset });
     } catch {
       setPhase({ name: "error", code: "network", message: "Deploy failed. Check your connection and try again." });
     }
+  }
+
+  function fmtTime(d: Date): string {
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function ScanHistory() {
+    if (history.length === 0) return null;
+    return (
+      <div className="space-y-1.5 pt-1">
+        <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest">This session</p>
+        {history.map((r, i) => (
+          <div key={i} className="flex items-center justify-between rounded-lg bg-gray-900 border border-gray-800 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+              <span className="font-mono text-xs text-white">{r.tag}</span>
+              <span className="text-gray-600 text-xs">deployed</span>
+            </div>
+            <span className="text-[11px] text-gray-500">{fmtTime(r.at)}</span>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -171,6 +198,7 @@ export default function TechDeployPage() {
           >
             Look up asset
           </button>
+          <ScanHistory />
         </div>
       )}
 
@@ -261,6 +289,7 @@ export default function TechDeployPage() {
           </div>
           <AssetCard asset={phase.asset} />
           <button onClick={reset} className="w-full rounded-lg bg-gray-900 py-3.5 text-sm font-semibold text-white hover:bg-gray-800 min-h-[44px]">Deploy another</button>
+          <ScanHistory />
         </div>
       )}
 
