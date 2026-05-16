@@ -26,23 +26,29 @@ export function AssetFilterBar({ current }: Props) {
 
   function update(key: string, value: string) {
     const sp = new URLSearchParams();
-    if (key !== "state"     && current.state)     sp.set("state",     current.state);
-    if (key !== "site"      && current.site)       sp.set("site",      current.site);
-    if (key !== "custodian" && current.custodian)  sp.set("custodian", current.custodian);
+    if (key !== "state"     && current.state)    sp.set("state",     current.state);
+    if (key !== "site"      && current.site)      sp.set("site",      current.site);
+    if (key !== "custodian" && current.custodian) sp.set("custodian", current.custodian);
     if (value) sp.set(key, value);
     router.push(`/manager?${sp.toString()}`);
   }
 
   const hasFilter = !!(current.state || current.site || current.custodian);
 
-  const selectCls = "rounded-lg border border-white-700 bg-white-900 text-gray-500 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none appearance-none";
+  // Desktop: compact inline. Mobile: full-width stacked with bigger tap targets.
+  const inputCls = [
+    "rounded-lg border border-gray-700 bg-gray-900 text-gray-300",
+    "px-3 text-sm focus:border-gray-500 focus:outline-none appearance-none",
+    "w-full py-3 min-h-[44px]",          // mobile: full width, tall
+    "sm:w-auto sm:py-2 sm:min-h-0",      // desktop: auto width, compact
+  ].join(" ");
 
   return (
-    <div className="flex flex-wrap gap-2 items-center">
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
       <select
         value={current.state ?? ""}
         onChange={(e) => update("state", e.target.value)}
-        className={selectCls}
+        className={inputCls}
       >
         {STATES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
       </select>
@@ -50,7 +56,7 @@ export function AssetFilterBar({ current }: Props) {
       <select
         value={current.site ?? ""}
         onChange={(e) => update("site", e.target.value)}
-        className={selectCls}
+        className={inputCls}
       >
         {SITES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
       </select>
@@ -62,13 +68,13 @@ export function AssetFilterBar({ current }: Props) {
         onKeyDown={(e) => { if (e.key === "Enter") update("custodian", custodian); }}
         onBlur={() => { if (custodian !== (current.custodian ?? "")) update("custodian", custodian); }}
         placeholder="Custodian (press Enter)…"
-        className="rounded-lg border border-white-700 bg-white-900 text-blue-400 placeholder:text-gray-500 px-3 py-2 text-sm focus:border-white-500 focus:outline-none min-w-[180px]"
+        className={`${inputCls} placeholder:text-gray-600 sm:min-w-[180px]`}
       />
 
       {hasFilter && (
         <button
           onClick={() => { setCustodian(""); router.push("/manager"); }}
-          className="text-sm text-gray-500 hover:text-gray-300 underline"
+          className="w-full sm:w-auto text-sm text-gray-500 hover:text-gray-300 underline py-2 sm:py-0"
         >
           Clear filters
         </button>
