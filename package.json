@@ -20,6 +20,12 @@
       "esbuild",
       "sharp",
       "unrs-resolver"
+    ],
+    "approvedBuilds": [
+      "better-sqlite3",
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
     ]
   }
 }
