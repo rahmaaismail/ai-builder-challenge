@@ -234,26 +234,26 @@ export default function TechDeployPage() {
             <p className="text-sm font-medium text-gray-700">Where are you racking it?</p>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Site</label>
-              <select value={site} onChange={(e) => handleSiteChange(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+              <select value={site} onChange={(e) => handleSiteChange(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm focus:border-blue-600 focus:outline-none">
                 {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Room</label>
-              <select value={room} onChange={(e) => setRoom(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+              <select value={room} onChange={(e) => setRoom(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm focus:border-blue-600 focus:outline-none">
                 {(ROOMS[site] ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Row</label>
-                <select value={row} onChange={(e) => setRow(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+                <select value={row} onChange={(e) => setRow(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm focus:border-blue-600 focus:outline-none">
                   {ROWS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Rack</label>
-                <select value={rack} onChange={(e) => setRack(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+                <select value={rack} onChange={(e) => setRack(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm focus:border-blue-600 focus:outline-none">
                   {RACKS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
@@ -265,7 +265,7 @@ export default function TechDeployPage() {
               <select
                 value={ru}
                 onChange={(e) => { setRu(e.target.value); setLocationError(""); }}
-                className={`w-full rounded-lg border-2 p-3 text-sm focus:outline-none ${locationError ? "border-red-400 focus:border-red-500" : "border-gray-300 focus:border-blue-600"}`}
+                className={`w-full rounded-lg border-2 bg-white text-gray-900 p-3 text-sm focus:outline-none ${locationError ? "border-red-400 focus:border-red-500" : "border-gray-300 focus:border-blue-600"}`}
               >
                 <option value="">Select position…</option>
                 {RUS.map((r) => <option key={r} value={r}>{r}</option>)}

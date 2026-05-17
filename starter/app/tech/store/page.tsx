@@ -223,19 +223,19 @@ export default function TechStorePage() {
             <p className="text-sm font-medium text-gray-700">Where are you putting it?</p>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Site</label>
-              <select value={site} onChange={(e) => handleSiteChange(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+              <select value={site} onChange={(e) => handleSiteChange(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm focus:border-blue-600 focus:outline-none">
                 {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Room</label>
-              <select value={room} onChange={(e) => setRoom(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+              <select value={room} onChange={(e) => setRoom(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm focus:border-blue-600 focus:outline-none">
                 {(ROOMS[site] ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Shelf</label>
-              <select value={shelf} onChange={(e) => setShelf(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 p-3 text-sm focus:border-blue-600 focus:outline-none">
+              <select value={shelf} onChange={(e) => setShelf(e.target.value)} className="w-full rounded-lg border-2 border-gray-300 bg-white text-gray-900 p-3 text-sm focus:border-blue-600 focus:outline-none">
                 {SHELVES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
